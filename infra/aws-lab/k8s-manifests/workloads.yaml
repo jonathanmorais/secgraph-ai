@@ -1,0 +1,59 @@
+# Workloads de demonstração para o GraphSec.
+# ServiceAccounts anotadas com IRSA (role-arn) — o connector lê a annotation
+# para traçar o path pod -> SA -> IAMRole -> recurso.
+# Imagens propositalmente antigas/vulneráveis para o Trivy achar CVEs.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: app
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: backend-sa
+  namespace: app
+  annotations:
+    eks.amazonaws.com/role-arn: ROLE_ARN_PLACEHOLDER
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      serviceAccountName: backend-sa
+      containers:
+        - name: api
+          # imagem antiga de propósito -> muitas CVEs
+          image: python:3.8-slim
+          command: ["sleep", "infinity"]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      # usa a default SA (sem IRSA)
+      containers:
+        - name: web
+          image: nginx:1.14
+          command: ["sleep", "infinity"]
