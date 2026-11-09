@@ -41,6 +41,31 @@ Abra http://localhost:5173 e pergunte no chat:
 - "quais EC2 estão expostas à internet na porta 22?"
 - "qual o caminho de ataque até o bucket de dados de clientes?"
 
+## Cenário K8s (containers + CVE + path pod→role)
+
+Com `scenario_k8s=true` (padrão), a EC2 pública vira um nó k3s com workloads de
+demo propositalmente vulneráveis e service accounts anotadas com IRSA.
+
+```bash
+terraform apply -auto-approve           # sobe EC2 (t3.small) + k3s + workloads
+terraform output k8s                    # IP, endpoint :6443, instruções kubeconfig
+
+# pegue o kubeconfig da instância (aguarde ~3min o user-data rodar):
+scp ec2-user@<IP>:/home/ec2-user/kubeconfig.yaml ../../backend/kubeconfig.yaml
+
+# sincronize workloads + scan de CVE (Trivy) no grafo:
+cd ../..
+docker compose exec backend python -m graphsec.connectors.k8s.sync
+```
+
+No frontend, clique na EC2 → painel mostra os **containers rodando** e suas
+**CVEs**; o botão "Traçar path de privilégio" pinta em verde o caminho
+`EC2 → Pod → ServiceAccount → IAMRole → policy → bucket PII`.
+
+Perguntas de chat que funcionam:
+- "quais imagens de container têm CVE crítica?"
+- "qual container exposto pode acessar dados via service account?"
+
 ## Destruir (importante!)
 
 ```bash

@@ -120,6 +120,13 @@ resource "aws_iam_role" "ec2_role" {
   })
 }
 
+# SSM: permite acessar a instância via `aws ssm` sem precisar de chave SSH.
+resource "aws_iam_role_policy_attachment" "ec2_ssm" {
+  count      = var.create_ec2 ? 1 : 0
+  role       = aws_iam_role.ec2_role[0].name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
 # Policy excessivamente permissiva: s3:* em qualquer bucket
 resource "aws_iam_role_policy" "ec2_s3_wide" {
   count = var.create_ec2 ? 1 : 0

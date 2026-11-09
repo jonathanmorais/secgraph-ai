@@ -29,9 +29,17 @@ output "k8s" {
   description = "Acesso ao k3s na EC2 (para o connector K8s do GraphSec)"
   value = var.scenario_k8s && var.create_ec2 ? {
     node_public_ip = aws_instance.public_ec2[0].public_ip
+    instance_id    = aws_instance.public_ec2[0].id
     api            = "https://${aws_instance.public_ec2[0].public_ip}:6443"
     sa_role        = aws_iam_role.k8s_backend_sa_role[0].arn
-    como_obter_kubeconfig = "aguarde ~3min o user-data; scp ec2-user@${aws_instance.public_ec2[0].public_ip}:/home/ec2-user/kubeconfig.yaml ./kubeconfig.yaml (ou pegue via SSM)"
+    kubeconfig_via_ssm = join(" ", [
+      "aws ssm send-command",
+      "--instance-ids ${aws_instance.public_ec2[0].id}",
+      "--document-name AWS-RunShellScript",
+      "--region ${var.region}",
+      "--parameters commands='cat /root/kubeconfig.yaml'",
+      "--query Command.CommandId --output text"
+    ])
   } : null
 }
 

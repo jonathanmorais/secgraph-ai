@@ -49,7 +49,8 @@ locals {
   k8s_script = join("\n", [
     "#!/bin/bash",
     "set -euxo pipefail",
-    "PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)",
+    "TOKEN=$(curl -sX PUT http://169.254.169.254/latest/api/token -H 'X-aws-ec2-metadata-token-ttl-seconds: 300')",
+    "PUBLIC_IP=$(curl -s -H \"X-aws-ec2-metadata-token: $TOKEN\" http://169.254.169.254/latest/meta-data/public-ipv4)",
     "curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC=\"--tls-san $PUBLIC_IP --write-kubeconfig-mode 644\" sh -",
     "until kubectl get nodes >/dev/null 2>&1; do sleep 3; done",
     "echo '${base64encode(local.k8s_manifest)}' | base64 -d >/tmp/workloads.yaml",
