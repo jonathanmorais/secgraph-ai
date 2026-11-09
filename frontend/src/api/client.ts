@@ -94,3 +94,44 @@ export async function fetchEc2AttackPath(
   );
   return r.json();
 }
+
+export interface BlastResource {
+  uid: string;
+  resource_type: string;
+  name: string;
+  hops: number;
+  path_via: string[];
+  path_nodes: string[];
+  criticality: string;
+  data_classification: string | null;
+}
+export interface BlastEscalation {
+  uid: string;
+  role_name: string;
+  is_service_role: boolean;
+  chain_length: number;
+  assumption_chain: string[];
+}
+export interface BlastReport {
+  compromised_identity: string;
+  compromised_type: string;
+  computation_time_ms: number;
+  partial: boolean;
+  total_resources_reached: number;
+  total_roles_escalatable: number;
+  total_data_stores_reached: number;
+  critical_resources_reached: number;
+  pii_data_exposed: boolean;
+  max_depth_reached: number;
+  resources: BlastResource[];
+  escalation_paths: BlastEscalation[];
+  graph_nodes: { id: string; label: string; criticality: string }[];
+  graph_edges: { source: string; target: string; relation: string }[];
+  summary: string;
+}
+
+export async function fetchBlastRadius(ident: string): Promise<BlastReport> {
+  const r = await fetch(`${BASE}/api/blast-radius/${encodeURIComponent(ident)}`);
+  if (!r.ok) throw new Error(`blast radius falhou: ${r.status}`);
+  return r.json();
+}

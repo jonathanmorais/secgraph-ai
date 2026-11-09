@@ -28,7 +28,22 @@ def sync_k8s(scan_cve: bool = True) -> dict[str, int]:
         edges.extend(scan_edges)
         cve_nodes = len({n.id for n in scan_nodes})
 
-    result = persist_graph(nodes, edges)
+    agent_id = "collector:k8s"
+    try:
+        from graphsec.gateway import get_registry
+
+        get_registry().register(agent_id, "collector", {"source": "k8s"})
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        result = persist_graph(nodes, edges, agent_id=agent_id)
+    finally:
+        try:
+            from graphsec.gateway import get_registry
+
+            get_registry().deregister(agent_id)
+        except Exception:  # noqa: BLE001
+            pass
     result["cves"] = cve_nodes
     return result
 

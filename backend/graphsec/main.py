@@ -4,7 +4,8 @@ from typing import AsyncIterator
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from graphsec.api import chat, connectors, graph, reports, workloads
+from graphsec.api import blast_radius, chat, connectors, graph, reports, workloads
+from graphsec.gateway import router as gateway_router
 from graphsec.graph.client import close_driver
 
 
@@ -29,6 +30,8 @@ app.include_router(chat.router)
 app.include_router(connectors.router)
 app.include_router(reports.router)
 app.include_router(workloads.router)
+app.include_router(gateway_router.router)
+app.include_router(blast_radius.router)
 
 
 @app.get("/health")

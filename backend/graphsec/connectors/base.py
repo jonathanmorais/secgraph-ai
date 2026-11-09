@@ -53,10 +53,26 @@ def infer_label(uid: str) -> tuple[str, dict[str, Any]]:
     return "Resource", {"name": uid}
 
 
-def persist_graph(nodes: list[Node], edges: list[Edge]) -> dict[str, int]:
+def _track_write(agent_id: str | None, node_id: str) -> None:
+    """Hook on_node_upsert: notifica o Activity Tracker (nunca quebra o sync)."""
+    if not agent_id:
+        return
+    try:
+        from graphsec.gateway import get_tracker
+
+        get_tracker().track(agent_id, "write", [node_id], agent_type="collector")
+    except Exception:  # noqa: BLE001 — tracking é best-effort
+        pass
+
+
+def persist_graph(
+    nodes: list[Node], edges: list[Edge], agent_id: str | None = None
+) -> dict[str, int]:
     """Persiste em duas fases: primeiro TODOS os nós, depois TODAS as arestas.
     Isso garante que arestas cross-connector (ex.: policy IAM -> bucket S3)
-    encontrem o nó alvo independentemente da ordem de coleta."""
+    encontrem o nó alvo independentemente da ordem de coleta.
+
+    Se `agent_id` for passado, cada upsert de nó é rastreado no Activity Gateway."""
     from graphsec.graph.client import run_write
 
     known_ids = {node.id for node in nodes}
@@ -68,6 +84,7 @@ def persist_graph(nodes: list[Node], edges: list[Edge]) -> dict[str, int]:
             f"MERGE (n:{node.label} {{uid: $uid}}) SET n += $props",
             {"uid": node.id, "props": props},
         )
+        _track_write(agent_id, node.id)
 
     # stubs para alvos de aresta ainda inexistentes (recursos AWS-managed etc.)
     stub_ids = {
@@ -97,7 +114,24 @@ def persist_graph(nodes: list[Node], edges: list[Edge]) -> dict[str, int]:
             },
         )
 
+    _bump_graph_version()
     return {"nodes": len(nodes), "stubs": len(stub_ids), "edges": len(edges)}
+
+
+def _bump_graph_version() -> None:
+    """Marca o grafo como alterado -> invalida caches do Blast Radius."""
+    try:
+        import time
+
+        import redis
+
+        from graphsec.config import get_settings
+
+        r = redis.from_url(get_settings().redis_url, decode_responses=True)
+        r.set("graph:last_sync_ts", repr(time.time()))
+        r.publish("graph:sync_complete", "1")
+    except Exception:  # noqa: BLE001 — best-effort
+        pass
 
 
 class BaseConnector(ABC):

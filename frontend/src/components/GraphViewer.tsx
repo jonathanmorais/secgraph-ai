@@ -26,6 +26,8 @@ interface Props {
   pathEdges?: PathEdge[];
   layout?: string;
   onNodeClick?: (node: Node) => void;
+  onNodeContext?: (node: Node) => void;
+  onCyReady?: (cy: Core | null) => void;
 }
 
 export function GraphViewer({
@@ -34,6 +36,8 @@ export function GraphViewer({
   pathEdges = [],
   layout = "cose",
   onNodeClick,
+  onNodeContext,
+  onCyReady,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
@@ -126,6 +130,95 @@ export function GraphViewer({
             "z-index": 100,
           },
         },
+        {
+          selector: ".agent-node",
+          style: {
+            shape: "diamond",
+            "border-style": "dashed",
+            "border-width": 2,
+            "background-color": "transparent",
+            "background-image": "none",
+            opacity: 0.85,
+            width: 30,
+            height: 30,
+            label: "data(agentLabel)",
+            "font-size": 8,
+            "text-valign": "top",
+            "text-margin-y": -2,
+            "z-index": 200,
+          },
+        },
+        {
+          selector: ".agent-edge",
+          style: {
+            "line-style": "dashed",
+            "line-dash-pattern": [6, 3],
+            opacity: 0.6,
+            width: 1.5,
+            "target-arrow-shape": "none",
+            label: "",
+            "z-index": 150,
+          },
+        },
+        {
+          selector: ".agent-decaying",
+          style: {
+            opacity: 0,
+            "transition-property": "opacity",
+            "transition-duration": "1000ms" as unknown as number,
+          },
+        },
+        // ----- Blast Radius -----
+        {
+          selector: ".blast-origin",
+          style: {
+            "background-color": "#dc2626",
+            "border-width": 4,
+            "border-color": "#fca5a5",
+            width: 52,
+            height: 52,
+            "z-index": 300,
+          },
+        },
+        { selector: ".blast-reached", style: { opacity: 0 } },
+        {
+          selector: ".blast-visible",
+          style: {
+            opacity: 1,
+            "transition-property": "opacity",
+            "transition-duration": "500ms" as unknown as number,
+          },
+        },
+        {
+          selector: ".blast-critical",
+          style: { "border-color": "#dc2626", "border-width": 3, "background-color": "#fef2f2" },
+        },
+        {
+          selector: ".blast-high",
+          style: { "border-color": "#f97316", "border-width": 2, "background-color": "#fff7ed" },
+        },
+        {
+          selector: ".blast-medium",
+          style: { "border-color": "#eab308", "border-width": 2, "background-color": "#fefce8" },
+        },
+        { selector: ".blast-low", style: { "border-color": "#6b7280", "border-width": 1 } },
+        {
+          selector: ".blast-edge",
+          style: {
+            "line-color": "#ef4444",
+            "target-arrow-color": "#ef4444",
+            "target-arrow-shape": "triangle",
+            width: 2,
+            opacity: 0.75,
+            "z-index": 250,
+            label: "",
+          },
+        },
+        { selector: ".blast-dimmed", style: { opacity: 0.12 } },
+        {
+          selector: ".blast-focus",
+          style: { "border-color": "#2563eb", "border-width": 4 },
+        },
       ],
       layout: layoutOptions(layout),
     });
@@ -135,6 +228,12 @@ export function GraphViewer({
     cy.on("tap", "node", (evt) => {
       const n = evt.target;
       onNodeClick?.({ id: n.id(), label: n.data("label"), properties: n.data() });
+    });
+
+    cy.on("cxttap", "node", (evt) => {
+      const n = evt.target;
+      if (n.id().startsWith("agent:")) return;
+      onNodeContext?.({ id: n.id(), label: n.data("label"), properties: n.data() });
     });
 
     const pathSet = new Set(pathEdges.map((e) => `${e.source}→${e.target}`));
@@ -149,8 +248,12 @@ export function GraphViewer({
     }
 
     cyRef.current = cy;
-    return () => cy.destroy();
-  }, [data, highlight, pathEdges, layout, onNodeClick]);
+    onCyReady?.(cy);
+    return () => {
+      onCyReady?.(null);
+      cy.destroy();
+    };
+  }, [data, highlight, pathEdges, layout, onNodeClick, onNodeContext, onCyReady]);
 
   return <div ref={ref} style={{ width: "100%", height: "100%" }} />;
 }
@@ -201,6 +304,7 @@ function attachNameLabels(cy: Core) {
   const draw = () => {
     overlay!.innerHTML = "";
     cy.nodes().forEach((n) => {
+      if (n.id().startsWith("agent:")) return;
       const pos = n.renderedPosition();
       const z = cy.zoom();
       const el = document.createElement("div");

@@ -1,9 +1,13 @@
+import { Core } from "cytoscape";
 import { useCallback, useMemo, useState } from "react";
 import { GraphData, Node, PathEdge } from "./api/client";
+import { AgentOverlay } from "./components/AgentOverlay";
+import { BlastRadius } from "./components/BlastRadius";
 import { Chat } from "./components/Chat";
 import { GraphViewer } from "./components/GraphViewer";
-import { NodeDetail } from "./components/NodeDetail";
+import { NodeDetail, blastIdentOf } from "./components/NodeDetail";
 import { TableView } from "./components/TableView";
+import { useAgentActivity } from "./hooks/useAgentActivity";
 import { useGraph } from "./hooks/useGraph";
 
 const LAYOUTS = ["cose", "breadthfirst", "concentric", "circle", "grid"];
@@ -19,6 +23,16 @@ export default function App() {
   const [layout, setLayout] = useState("cose");
   const [drillEc2, setDrillEc2] = useState<Node | null>(null);
   const [drillData, setDrillData] = useState<GraphData | null>(null);
+  const [cy, setCy] = useState<Core | null>(null);
+  const [blastIdent, setBlastIdent] = useState<string | null>(null);
+  const { agents, connected, sendBrowse } = useAgentActivity();
+
+  const IDENTITY_LABELS = ["IAMUser", "IAMRole", "EC2Instance"];
+  const handleNodeContext = useCallback((n: Node) => {
+    if (IDENTITY_LABELS.includes(n.label)) {
+      setBlastIdent(blastIdentOf(n));
+    }
+  }, []);
 
   const mergedData = useMemo<GraphData>(() => drillData ?? data, [data, drillData]);
 
@@ -43,10 +57,11 @@ export default function App() {
 
   const handleNodeClick = useCallback((n: Node) => {
     setSelected(n);
+    sendBrowse([n.id]);
     if (n.label === "EC2Instance" && !drillEc2) {
       enterDrill(n);
     }
-  }, [drillEc2, enterDrill]);
+  }, [drillEc2, enterDrill, sendBrowse]);
 
   const cycleLayout = () => {
     const i = LAYOUTS.indexOf(layout);
@@ -99,7 +114,11 @@ export default function App() {
                 pathEdges={pathEdges}
                 layout={layout}
                 onNodeClick={handleNodeClick}
+                onNodeContext={handleNodeContext}
+                onCyReady={setCy}
               />
+              <AgentOverlay cy={cy} agents={agents} connected={connected} />
+              <BlastRadius cy={cy} ident={blastIdent} onClose={() => setBlastIdent(null)} />
               {drillEc2 && (
                 <div className="drill-banner">
                   <button className="btn" onClick={exitDrill}>← Voltar ao grafo AWS</button>
@@ -112,6 +131,11 @@ export default function App() {
                 node={selected}
                 drillMode={!!drillEc2}
                 onClose={() => setSelected(null)}
+                onBlastRadius={(id) => {
+                  if (drillEc2) exitDrill();
+                  setSelected(null);
+                  setBlastIdent(id);
+                }}
                 onTracePath={(ids, edges) => {
                   setHighlight(ids);
                   setPathEdges(edges);

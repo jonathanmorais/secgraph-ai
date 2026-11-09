@@ -23,7 +23,7 @@ NODE_LABELS: Final[dict[str, list[str]]] = {
     "Finding": ["severity", "source", "title", "resource_arn"],
     "ServicePrincipal": ["service"],
     # Kubernetes / workloads
-    "Pod": ["name", "namespace", "node_name", "status"],
+    "Pod": ["name", "namespace", "node_name", "status", "is_ai_agent", "ai_framework"],
     "Container": ["name", "namespace", "pod", "image_ref"],
     "ContainerImage": ["image_ref", "repo", "tag", "digest", "cve_count", "critical_count", "high_count", "worst_severity"],
     "CVE": ["cve_id", "severity", "package", "installed_version", "fixed_version", "title"],
@@ -89,8 +89,17 @@ CONSTRAINTS: Final[list[str]] = [
     "CREATE CONSTRAINT vpc_id IF NOT EXISTS FOR (n:VPC) REQUIRE n.vpc_id IS UNIQUE",
 ]
 
+# índices para acelerar resolução de identity e travessias do Blast Radius
+INDEXES: Final[list[str]] = [
+    "CREATE INDEX idx_iamuser_arn IF NOT EXISTS FOR (n:IAMUser) ON (n.arn)",
+    "CREATE INDEX idx_iamrole_arn IF NOT EXISTS FOR (n:IAMRole) ON (n.arn)",
+    "CREATE INDEX idx_iamuser_name IF NOT EXISTS FOR (n:IAMUser) ON (n.user_name)",
+    "CREATE INDEX idx_iamrole_name IF NOT EXISTS FOR (n:IAMRole) ON (n.role_name)",
+    "CREATE INDEX idx_s3_name IF NOT EXISTS FOR (n:S3Bucket) ON (n.bucket_name)",
+]
+
 
 def apply_constraints() -> None:
     from graphsec.graph.client import run_write
-    for stmt in CONSTRAINTS:
+    for stmt in (*CONSTRAINTS, *INDEXES):
         run_write(stmt)

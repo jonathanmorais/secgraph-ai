@@ -54,6 +54,24 @@ FEW_SHOTS: list[dict[str, str]] = [
         ),
     },
     {
+        "q": "quais agentes de IA estao rodando?",
+        "c": (
+            "MATCH (pod:Pod {is_ai_agent: true}) "
+            "RETURN pod.name, pod.namespace, pod.ai_framework, pod.status"
+        ),
+    },
+    {
+        "q": "quais agentes de IA estao em producao e quais permissoes possuem?",
+        "c": (
+            "MATCH (pod:Pod {is_ai_agent: true}) "
+            "OPTIONAL MATCH (pod)-[:USES_SA]->(sa:ServiceAccount)"
+            "-[:CAN_ASSUME]->(role:IAMRole)-[:HAS_POLICY]->(:IAMPolicy)-[:ALLOWS]->(res) "
+            "RETURN pod.name, pod.ai_framework, sa.name AS service_account, "
+            "role.role_name AS role, "
+            "collect(DISTINCT coalesce(res.bucket_name, res.db_id, res.function_name)) AS recursos"
+        ),
+    },
+    {
         "q": "qual container exposto pode acessar dados via service account?",
         "c": (
             "MATCH (ec2:EC2Instance)-[:HOSTS]->(pod:Pod)-[:USES_SA]->"
@@ -111,6 +129,15 @@ REGRAS:
   (PUBLIC_ACCESS, CAN_ASSUME, HAS_POLICY, ALLOWS), entao use ->.
 - Nos Finding/STORES_DATA podem nao estar populados; nao dependa deles para
   identificar dados sensiveis.
+- "Agente de IA" / "AI agent" = no Pod com propriedade is_ai_agent = true
+  (o framework fica em pod.ai_framework: langchain, mcp, llamaindex, etc.).
+  As permissoes do agente seguem: (Pod)-[:USES_SA]->(ServiceAccount)
+  -[:CAN_ASSUME]->(IAMRole)-[:HAS_POLICY]->(IAMPolicy)-[:ALLOWS]->(recurso).
+  IMPORTANTE: "em producao" / "rodando" para agentes NAO e filtro de nome.
+  Todo Pod is_ai_agent=true ja esta em execucao no cluster. NUNCA filtre
+  agentes por pod.name/namespace CONTAINS 'prod' — isso zera o resultado.
+  A regra de 'prod'/'cliente'/'pii' acima vale so para NOMES DE RECURSO
+  (bucket/RDS), nunca para pods de agente.
 - Se a pergunta nao pode ser respondida pelo grafo, diga isso em uma linha comecando com `ERRO:`.
 - Responda em portugues.
 

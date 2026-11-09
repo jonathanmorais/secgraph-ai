@@ -44,3 +44,28 @@ Fonte canônica: `backend/graphsec/chat/prompts.py` (`FEW_SHOTS`).
 ```
 
 Para adicionar mais exemplos edite o array `FEW_SHOTS` em `prompts.py` e replique aqui.
+
+## Blast Radius (roteado por intenção, não por Cypher)
+
+Estas perguntas **não** passam pelo text-to-Cypher. O `chat/engine.py` detecta a
+intenção, resolve o identity (uid/ARN/nome) e chama o `BlastRadiusEngine`
+diretamente — resposta determinística em <2s, com os nós do blast para highlight.
+
+```yaml
+- pergunta: "blast radius do dev-no-mfa"
+  action: blast_radius            # engine, não Cypher
+
+- pergunta: "o token do contractor vazou, qual o impacto?"
+  action: blast_radius
+
+- pergunta: "o que o i-0abc123 alcança?"
+  action: blast_radius
+
+- pergunta: "se a role break-glass-admin for comprometida, o que ela alcança?"
+  action: blast_radius
+```
+
+Gatilhos reconhecidos (regex em `_BLAST_PATTERNS`): `blast radius <id>`,
+`o que <id> alcança/acessa`, `se <id> for comprometido`, `token do <id> vazou`,
+`impacto do <id>`. Se o identity não resolver no grafo, cai no text-to-Cypher normal.
+

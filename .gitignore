@@ -21,3 +21,5 @@ neo4j_data/
 *.tfstate.*
 .terraform.lock.hcl
 infra/aws-lab/.lambda.zip
+infra/aws-lab/kubeconfig.yaml
+backend/kubeconfig.yaml

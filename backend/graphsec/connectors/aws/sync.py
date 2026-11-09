@@ -30,7 +30,23 @@ def sync_all() -> dict[str, int]:
         log.info("Coletando %s", conn.name)
         nodes.extend(conn.get_nodes())
         edges.extend(conn.get_edges())
-    return persist_graph(nodes, edges)
+
+    agent_id = "collector:aws"
+    try:
+        from graphsec.gateway import get_registry
+
+        get_registry().register(agent_id, "collector", {"source": "aws"})
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        return persist_graph(nodes, edges, agent_id=agent_id)
+    finally:
+        try:
+            from graphsec.gateway import get_registry
+
+            get_registry().deregister(agent_id)
+        except Exception:  # noqa: BLE001
+            pass
 
 
 if __name__ == "__main__":

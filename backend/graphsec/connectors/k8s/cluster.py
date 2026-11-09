@@ -32,6 +32,49 @@ def parse_private_ip(hostname: str | None) -> str | None:
     return ".".join(m.groups()) if m else None
 
 
+# frameworks de agente de IA reconhecíveis por nome de imagem (fallback)
+_AI_IMAGE_HINTS = {
+    "langchain": "langchain",
+    "llamaindex": "llamaindex",
+    "llama-index": "llamaindex",
+    "autogpt": "autogpt",
+    "crewai": "crewai",
+    "vllm": "vllm",
+    "ollama": "ollama",
+    "/mcp": "mcp",
+    "mcp-server": "mcp",
+    "semantic-kernel": "semantic-kernel",
+}
+
+
+def detect_ai_agent(
+    annotations: dict[str, str] | None,
+    labels: dict[str, str] | None,
+    images: list[str],
+) -> tuple[bool, str]:
+    """Classifica um workload como agente de IA e infere o framework.
+
+    Ordem de confiança: annotation explícita > label de componente > imagem."""
+    annotations = annotations or {}
+    labels = labels or {}
+
+    if annotations.get("graphsec.io/ai-agent", "").lower() == "true":
+        fw = annotations.get("graphsec.io/ai-framework", "unknown")
+        return True, fw
+
+    if labels.get("app.kubernetes.io/component") == "agent":
+        fw = annotations.get("graphsec.io/ai-framework", "unknown")
+        return True, fw
+
+    for img in images:
+        low = img.lower()
+        for hint, fw in _AI_IMAGE_HINTS.items():
+            if hint in low:
+                return True, fw
+
+    return False, ""
+
+
 def resolve_instance_id_by_private_ip(private_ip: str) -> str | None:
     """Busca o uid da EC2 no grafo pelo private_ip (fallback para k3s)."""
     from graphsec.graph.client import run_read
@@ -132,18 +175,21 @@ class K8sConnector(BaseConnector):
             node_name = pod.spec.node_name
             sa_name = pod.spec.service_account_name or "default"
             pod_uid = f"pod/{ns}/{name}"
-            self._nodes.append(
-                Node(
-                    id=pod_uid,
-                    label="Pod",
-                    properties={
-                        "name": name,
-                        "namespace": ns,
-                        "node_name": node_name or "",
-                        "status": pod.status.phase if pod.status else "",
-                    },
-                )
+            meta = pod.metadata
+            images = [c.image for c in pod.spec.containers if c.image]
+            is_ai_agent, ai_framework = detect_ai_agent(
+                meta.annotations, meta.labels, images
             )
+            props: dict[str, Any] = {
+                "name": name,
+                "namespace": ns,
+                "node_name": node_name or "",
+                "status": pod.status.phase if pod.status else "",
+                "is_ai_agent": is_ai_agent,
+            }
+            if is_ai_agent:
+                props["ai_framework"] = ai_framework
+            self._nodes.append(Node(id=pod_uid, label="Pod", properties=props))
             # EC2 (nó) -> Pod
             if node_name and node_name in node_instance:
                 self._edges.append(

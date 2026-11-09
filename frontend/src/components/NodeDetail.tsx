@@ -2,17 +2,30 @@ import { useEffect, useState } from "react";
 import { Node, PathEdge, Workload, fetchEc2AttackPath, fetchEc2Workloads } from "../api/client";
 import { badges, displayName, props } from "../presenter";
 
+const IDENTITY_LABELS = ["IAMUser", "IAMRole", "EC2Instance"];
+
+/** Identificador sem barras para a URL do blast radius (evita 404 de routing
+ * com ARNs, que contêm '/'). O engine resolve por nome/instance_id. */
+export function blastIdentOf(node: Node): string {
+  const p = node.properties as Record<string, unknown>;
+  return String(
+    p.user_name || p.role_name || p.instance_id || node.id
+  );
+}
+
 interface Props {
   node: Node | null;
   onClose: () => void;
   onTracePath?: (nodeIds: string[], edges: PathEdge[]) => void;
+  onBlastRadius?: (ident: string) => void;
   drillMode?: boolean;
 }
 
-export function NodeDetail({ node, onClose, onTracePath, drillMode }: Props) {
+export function NodeDetail({ node, onClose, onTracePath, onBlastRadius, drillMode }: Props) {
   const [workloads, setWorkloads] = useState<Workload[]>([]);
   const [loadingWl, setLoadingWl] = useState(false);
   const isEc2 = node?.label === "EC2Instance";
+  const isIdentity = !!node && IDENTITY_LABELS.includes(node.label);
   const instanceId = (node?.properties?.instance_id as string) || node?.id || "";
 
   useEffect(() => {
@@ -64,6 +77,15 @@ export function NodeDetail({ node, onClose, onTracePath, drillMode }: Props) {
           ))}
         </tbody>
       </table>
+
+      {isIdentity && onBlastRadius && (
+        <button
+          className="btn primary nd-trace"
+          onClick={() => onBlastRadius(blastIdentOf(node))}
+        >
+          💥 Calcular Blast Radius
+        </button>
+      )}
 
       {isEc2 && (
         <div className="nd-workloads">
