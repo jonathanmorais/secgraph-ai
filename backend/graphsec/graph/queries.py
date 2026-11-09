@@ -24,9 +24,13 @@ ORDER BY f.severity DESC
 LIMIT $limit
 """
 
+K8S_LABELS = ["Pod", "Container", "ContainerImage", "CVE", "ServiceAccount"]
+
 FULL_GRAPH = """
 MATCH (n)
+WHERE NOT any(lbl IN labels(n) WHERE lbl IN $exclude_labels)
 OPTIONAL MATCH (n)-[r]->(m)
+WHERE NOT any(lbl IN labels(m) WHERE lbl IN $exclude_labels)
 RETURN n, r, m
 LIMIT $limit
 """

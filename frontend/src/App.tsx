@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Node, PathEdge } from "./api/client";
+import { useCallback, useMemo, useState } from "react";
+import { GraphData, Node, PathEdge } from "./api/client";
 import { Chat } from "./components/Chat";
 import { GraphViewer } from "./components/GraphViewer";
 import { NodeDetail } from "./components/NodeDetail";
@@ -17,6 +17,36 @@ export default function App() {
   const [tab, setTab] = useState<"graph" | "table">("graph");
   const [query, setQuery] = useState(DEFAULT_QUERY);
   const [layout, setLayout] = useState("cose");
+  const [drillEc2, setDrillEc2] = useState<Node | null>(null);
+  const [drillData, setDrillData] = useState<GraphData | null>(null);
+
+  const mergedData = useMemo<GraphData>(() => drillData ?? data, [data, drillData]);
+
+  const enterDrill = useCallback(async (ec2: Node) => {
+    const { fetchEc2Subgraph } = await import("./api/client");
+    const sg = await fetchEc2Subgraph(ec2.properties.instance_id as string || ec2.id);
+    setDrillEc2(ec2);
+    setDrillData(sg);
+    setHighlight([]);
+    setPathEdges([]);
+    setLayout("breadthfirst");
+  }, []);
+
+  const exitDrill = useCallback(() => {
+    setDrillEc2(null);
+    setDrillData(null);
+    setHighlight([]);
+    setPathEdges([]);
+    setLayout("cose");
+    setSelected(null);
+  }, []);
+
+  const handleNodeClick = useCallback((n: Node) => {
+    setSelected(n);
+    if (n.label === "EC2Instance" && !drillEc2) {
+      enterDrill(n);
+    }
+  }, [drillEc2, enterDrill]);
 
   const cycleLayout = () => {
     const i = LAYOUTS.indexOf(layout);
@@ -28,7 +58,7 @@ export default function App() {
       <div className="header">
         <span className="brand">GraphSec</span>
         <span className="meta">
-          {loading ? "carregando…" : `${data.nodes.length} nós · ${data.edges.length} relações`}
+          {loading ? "carregando…" : `${mergedData.nodes.length} nós · ${mergedData.edges.length} relações`}
         </span>
         <span className="spacer" />
         <button className="btn" onClick={reload}>
@@ -52,26 +82,35 @@ export default function App() {
             </button>
           </div>
           <span className="counter">
-            {data.nodes.length} nós, {data.edges.length} rels
+            {mergedData.nodes.length} nós, {mergedData.edges.length} rels
           </span>
         </div>
 
         <div className="canvas">
           {error && <div className="canvas-empty" style={{ color: "var(--danger)" }}>{error}</div>}
-          {!error && data.nodes.length === 0 && (
+          {!error && mergedData.nodes.length === 0 && (
             <div className="canvas-empty">Grafo vazio — rode o sync AWS para popular.</div>
           )}
           {tab === "graph" ? (
             <>
               <GraphViewer
-                data={data}
+                data={mergedData}
                 highlight={highlight}
                 pathEdges={pathEdges}
                 layout={layout}
-                onNodeClick={setSelected}
+                onNodeClick={handleNodeClick}
               />
+              {drillEc2 && (
+                <div className="drill-banner">
+                  <button className="btn" onClick={exitDrill}>← Voltar ao grafo AWS</button>
+                  <span className="drill-title">
+                    Workloads K8s em <strong>{(drillEc2.properties.instance_id as string) || drillEc2.id}</strong>
+                  </span>
+                </div>
+              )}
               <NodeDetail
                 node={selected}
+                drillMode={!!drillEc2}
                 onClose={() => setSelected(null)}
                 onTracePath={(ids, edges) => {
                   setHighlight(ids);
@@ -85,7 +124,7 @@ export default function App() {
               </div>
             </>
           ) : (
-            <TableView data={data} />
+            <TableView data={mergedData} />
           )}
         </div>
       </div>

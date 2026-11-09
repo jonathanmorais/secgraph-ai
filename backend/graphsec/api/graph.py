@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from graphsec.graph.client import fetch_graph, run_read
 from graphsec.graph.paths import find_attack_paths, shortest_path
-from graphsec.graph.queries import FULL_GRAPH
+from graphsec.graph.queries import FULL_GRAPH, K8S_LABELS
 from graphsec.models.graph import Edge, GraphData, Node
 
 router = APIRouter(prefix="/api/graph", tags=["graph"])
@@ -10,7 +10,7 @@ router = APIRouter(prefix="/api/graph", tags=["graph"])
 
 @router.get("/", response_model=GraphData)
 def get_graph(limit: int = Query(500, le=5000)) -> GraphData:
-    raw = fetch_graph(FULL_GRAPH, {"limit": limit})
+    raw = fetch_graph(FULL_GRAPH, {"limit": limit, "exclude_labels": K8S_LABELS})
 
     # element_id -> id estável (uid setado no sync, senão o element_id)
     id_map = {

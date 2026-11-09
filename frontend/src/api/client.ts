@@ -77,6 +77,15 @@ export async function fetchEc2Workloads(
   return r.json();
 }
 
+export async function fetchEc2Subgraph(
+  instanceId: string
+): Promise<GraphData> {
+  const r = await fetch(
+    `${BASE}/api/workloads/ec2/${encodeURIComponent(instanceId)}/subgraph`
+  );
+  return r.json();
+}
+
 export async function fetchEc2AttackPath(
   instanceId: string
 ): Promise<{ node_ids: string[]; path_edges: PathEdge[] }> {

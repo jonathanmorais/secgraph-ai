@@ -6,9 +6,10 @@ interface Props {
   node: Node | null;
   onClose: () => void;
   onTracePath?: (nodeIds: string[], edges: PathEdge[]) => void;
+  drillMode?: boolean;
 }
 
-export function NodeDetail({ node, onClose, onTracePath }: Props) {
+export function NodeDetail({ node, onClose, onTracePath, drillMode }: Props) {
   const [workloads, setWorkloads] = useState<Workload[]>([]);
   const [loadingWl, setLoadingWl] = useState(false);
   const isEc2 = node?.label === "EC2Instance";
@@ -88,7 +89,7 @@ export function NodeDetail({ node, onClose, onTracePath }: Props) {
               </div>
             </div>
           ))}
-          {workloads.length > 0 && (
+          {workloads.length > 0 && drillMode && (
             <button className="btn primary nd-trace" onClick={tracePath}>
               Traçar path de privilégio →
             </button>

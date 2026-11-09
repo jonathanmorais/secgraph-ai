@@ -46,6 +46,24 @@ FEW_SHOTS: list[dict[str, str]] = [
         ),
     },
     {
+        "q": "quais imagens de container tem CVE critica?",
+        "c": (
+            "MATCH (img:ContainerImage)-[:HAS_CVE]->(cve:CVE {severity: 'CRITICAL'}) "
+            "RETURN img.image_ref, count(cve) AS criticas "
+            "ORDER BY criticas DESC"
+        ),
+    },
+    {
+        "q": "qual container exposto pode acessar dados via service account?",
+        "c": (
+            "MATCH (ec2:EC2Instance)-[:HOSTS]->(pod:Pod)-[:USES_SA]->"
+            "(sa:ServiceAccount)-[:CAN_ASSUME]->(:IAMRole)-[:HAS_POLICY]->"
+            "(:IAMPolicy)-[:ALLOWS]->(b:S3Bucket) "
+            "WHERE ec2.public_ip IS NOT NULL "
+            "RETURN pod.name, sa.name, b.bucket_name"
+        ),
+    },
+    {
         "q": "quais roles podem acessar o RDS de producao?",
         "c": (
             "MATCH (r:IAMRole)-[:HAS_POLICY]->(p:IAMPolicy)-[:ALLOWS]->(db:RDSInstance) "

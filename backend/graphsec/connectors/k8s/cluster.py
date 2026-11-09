@@ -11,8 +11,10 @@ from graphsec.connectors.base import BaseConnector
 from graphsec.models.graph import Edge, Node
 
 IRSA_ANNOTATION = "eks.amazonaws.com/role-arn"
-# providerID: aws:///<az>/<instance-id>
+# providerID AWS: aws:///<az>/<instance-id>
 _PROVIDER_RE = re.compile(r"aws:///[^/]+/(i-[0-9a-f]+)")
+# hostname AWS para k3s / kubelet sem cloud-provider: ip-10-42-1-92.ec2.internal
+_HOSTNAME_RE = re.compile(r"ip-(\d+)-(\d+)-(\d+)-(\d+)")
 
 
 def parse_instance_id(provider_id: str | None) -> str | None:
@@ -20,6 +22,25 @@ def parse_instance_id(provider_id: str | None) -> str | None:
         return None
     m = _PROVIDER_RE.search(provider_id)
     return m.group(1) if m else None
+
+
+def parse_private_ip(hostname: str | None) -> str | None:
+    """Extrai IP privado do hostname AWS style `ip-10-42-1-92.ec2.internal`."""
+    if not hostname:
+        return None
+    m = _HOSTNAME_RE.search(hostname)
+    return ".".join(m.groups()) if m else None
+
+
+def resolve_instance_id_by_private_ip(private_ip: str) -> str | None:
+    """Busca o uid da EC2 no grafo pelo private_ip (fallback para k3s)."""
+    from graphsec.graph.client import run_read
+
+    rows = run_read(
+        "MATCH (ec2:EC2Instance {private_ip: $ip}) RETURN ec2.uid AS uid LIMIT 1",
+        {"ip": private_ip},
+    )
+    return rows[0]["uid"] if rows else None
 
 
 def parse_image_ref(ref: str) -> dict[str, str]:
@@ -73,11 +94,16 @@ class K8sConnector(BaseConnector):
         self._loaded = True
 
     def _load_nodes(self, core: Any) -> dict[str, str]:
-        """Retorna map node_name -> instance_id (para ligar Pod ao EC2)."""
+        """Retorna map node_name -> instance_id (para ligar Pod ao EC2).
+        Suporta providerID AWS (aws:///...) e fallback via hostname (k3s)."""
         mapping: dict[str, str] = {}
         for n in core.list_node().items:
             name = n.metadata.name
             instance_id = parse_instance_id(getattr(n.spec, "provider_id", None))
+            if not instance_id:
+                private_ip = parse_private_ip(name)
+                if private_ip:
+                    instance_id = resolve_instance_id_by_private_ip(private_ip)
             if instance_id:
                 mapping[name] = instance_id
         return mapping
